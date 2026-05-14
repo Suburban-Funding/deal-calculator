@@ -69,14 +69,24 @@
   }
   .field input:focus { border-color: #4a7fd4; box-shadow: 0 0 0 3px rgba(74,127,212,.12); }
 
+  .seg-toggle { display: flex; gap: 6px; margin-top: 6px; }
+  .seg-toggle button {
+    flex: 1; font-size: 12px; font-weight: 500; padding: 7px 0;
+    cursor: pointer; font-family: inherit; border-radius: 6px; transition: all .15s;
+    border: 1.5px solid #bbb; color: #999; background: #fff;
+  }
+  .seg-toggle button.active {
+    border: 1.5px solid #1a1a1a; color: #fff; background: #1a1a1a;
+  }
+
   .remit-toggle { display: flex; gap: 8px; margin: 1rem 0 .75rem; }
   .remit-toggle button {
-    font-size: 12px; padding: 5px 14px; border-radius: 20px; cursor: pointer;
-    background: transparent; border: 0.5px solid var(--border-strong);
-    color: var(--text-secondary); font-family: inherit; transition: all .15s;
+    font-size: 12px; font-weight: 500; padding: 5px 16px; border-radius: 20px;
+    cursor: pointer; font-family: inherit; transition: all .15s;
+    border: 1.5px solid #bbb; color: #999; background: #fff;
   }
   .remit-toggle button.active {
-    background: var(--blue-bg); border-color: #4a7fd4; color: var(--blue-text); font-weight: 600;
+    border: 1.5px solid #1a1a1a; color: #fff; background: #1a1a1a;
   }
 
   .out-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 1rem; }
@@ -147,9 +157,12 @@
         <span class="hint">e.g. 1.35 = 35¢ per dollar</span>
       </div>
       <div class="field">
-        <label for="term">Term (weeks)</label>
-        <input type="number" id="term" value="24" min="1" max="104" step="1">
-        <span class="hint">e.g. 24 wks, 36 wks</span>
+        <label for="term">Term length</label>
+        <input type="number" id="term" value="24" min="1" max="730" step="1">
+        <div class="seg-toggle">
+          <button id="btn-weeks" class="active" onclick="setTermMode('weeks')">Weeks</button>
+          <button id="btn-days" onclick="setTermMode('days')">Days</button>
+        </div>
       </div>
       <div class="field">
         <label for="mrev">Monthly revenue ($)</label>
@@ -193,22 +206,10 @@
     <div class="card">
       <h3>Remittance load — industry context</h3>
       <table class="thresh-table">
-        <tr>
-          <td><span class="thresh-dot t-green"></span>Under 15%</td>
-          <td>Comfortable. Easy to service. Straightforward close.</td>
-        </tr>
-        <tr>
-          <td><span class="thresh-dot t-green"></span>15–25%</td>
-          <td>Normal MCA range. Most businesses handle this without strain.</td>
-        </tr>
-        <tr>
-          <td><span class="thresh-dot t-amber"></span>25–35%</td>
-          <td>Elevated but common on stacked positions. Confirm use of funds justifies the load.</td>
-        </tr>
-        <tr>
-          <td><span class="thresh-dot t-red"></span>Over 35%</td>
-          <td>High load. Merchant will feel it. Flag if they have existing positions.</td>
-        </tr>
+        <tr><td><span class="thresh-dot t-green"></span>Under 15%</td><td>Comfortable. Easy to service. Straightforward close.</td></tr>
+        <tr><td><span class="thresh-dot t-green"></span>15–25%</td><td>Normal MCA range. Most businesses handle this without strain.</td></tr>
+        <tr><td><span class="thresh-dot t-amber"></span>25–35%</td><td>Elevated but common on stacked positions. Confirm use of funds justifies the load.</td></tr>
+        <tr><td><span class="thresh-dot t-red"></span>Over 35%</td><td>High load. Merchant will feel it. Flag if they have existing positions.</td></tr>
       </table>
       <p class="thresh-note">Talking point: "A normal MCA runs up to 35% of monthly revenue. This deal has you at [X%] — that's in the healthy range."</p>
     </div>
@@ -223,11 +224,19 @@
 
 <script>
   let remitMode = 'daily';
+  let termMode = 'weeks';
 
   function setRemit(m) {
     remitMode = m;
     document.getElementById('btn-daily').classList.toggle('active', m === 'daily');
     document.getElementById('btn-weekly').classList.toggle('active', m === 'weekly');
+    calc();
+  }
+
+  function setTermMode(m) {
+    termMode = m;
+    document.getElementById('btn-weeks').classList.toggle('active', m === 'weeks');
+    document.getElementById('btn-days').classList.toggle('active', m === 'days');
     calc();
   }
 
@@ -237,13 +246,17 @@
   function calc() {
     const funded = parseFloat(document.getElementById('funded').value) || 0;
     const factor = parseFloat(document.getElementById('factor').value) || 1;
-    const termWeeks = parseFloat(document.getElementById('term').value) || 1;
+    const termInput = parseFloat(document.getElementById('term').value) || 1;
     const mrev = parseFloat(document.getElementById('mrev').value) || 0;
+
+    const termWeeks = termMode === 'days' ? termInput / 7 : termInput;
+    const termLabel = termMode === 'days' ? termInput + '-day term' : termInput + '-week term';
 
     const payback = funded * factor;
     const cost = payback - funded;
     const cocCents = Math.round((factor - 1) * 100);
-    const daily = payback / (termWeeks * 5);
+    const workingDays = termWeeks * 5;
+    const daily = payback / workingDays;
     const weekly = payback / termWeeks;
     const monthlyRemit = daily * 21;
 
@@ -282,12 +295,12 @@
         <div class="aff-badge ${badgeClass}">${badgeText}</div>
       `;
 
-      scriptBox.innerHTML = `<div class="script-box">"Here's what this looks like in plain numbers. You're getting <span class="hl">${fmt(funded)}</span> deposited. Over a <span class="hl">${termWeeks}-week term</span>, you'll remit <span class="hl">${remitLine}</span> — total payback is <span class="hl">${fmt(payback)}</span>.<br><br>The cost of this capital is <span class="hl">${fmt(cost)}</span> — or <span class="hl">${cocCents} cents on every dollar</span> you put to work.<br><br>On your revenue, that remittance is <span class="hl">${pct(rp)} of your monthly gross</span>. You're keeping <span class="hl">${fmt(Math.max(remaining, 0))}</span> of every <span class="hl">${fmt(mrev)}</span> you bring in. For context, a normal MCA runs up to 35% of monthly revenue — <span class="hl">you're at ${pct(rp)}</span>.<br><br>The question isn't whether it's expensive — the question is: what does this capital do for your business over the next <span class="hl">${termWeeks} weeks</span>? If this covers payroll, lands a contract, or keeps you operational through your busy season — that math changes fast."</div>`;
+      scriptBox.innerHTML = `<div class="script-box">"Here's what this looks like in plain numbers. You're getting <span class="hl">${fmt(funded)}</span> deposited. Over a <span class="hl">${termLabel}</span>, you'll remit <span class="hl">${remitLine}</span> — total payback is <span class="hl">${fmt(payback)}</span>.<br><br>The cost of this capital is <span class="hl">${fmt(cost)}</span> — or <span class="hl">${cocCents} cents on every dollar</span> you put to work.<br><br>On your revenue, that remittance is <span class="hl">${pct(rp)} of your monthly gross</span>. You're keeping <span class="hl">${fmt(Math.max(remaining, 0))}</span> of every <span class="hl">${fmt(mrev)}</span> you bring in. For context, a normal MCA runs up to 35% of monthly revenue — <span class="hl">you're at ${pct(rp)}</span>.<br><br>The question isn't whether it's expensive — the question is: what does this capital do for your business over the next <span class="hl">${termLabel}</span>? If this covers payroll, lands a contract, or keeps you operational through your busy season — that math changes fast."</div>`;
 
     } else {
       document.getElementById('aff-body').innerHTML = '<p class="aff-placeholder">Enter monthly revenue to see affordability.</p>';
       if (funded > 0 && factor > 1) {
-        scriptBox.innerHTML = `<div class="script-box">"Here's what this looks like in plain numbers. You're getting <span class="hl">${fmt(funded)}</span> deposited. Over a <span class="hl">${termWeeks}-week term</span>, you'll remit <span class="hl">${remitLine}</span> — total payback is <span class="hl">${fmt(payback)}</span>.<br><br>The cost of this capital is <span class="hl">${fmt(cost)}</span> — or <span class="hl">${cocCents} cents on every dollar</span> you put to work.<br><br>The question isn't whether it's expensive — the question is: what does this capital do for your business over the next <span class="hl">${termWeeks} weeks</span>? If this covers payroll, lands a contract, or keeps you operational through your busy season — that math changes fast."</div>`;
+        scriptBox.innerHTML = `<div class="script-box">"Here's what this looks like in plain numbers. You're getting <span class="hl">${fmt(funded)}</span> deposited. Over a <span class="hl">${termLabel}</span>, you'll remit <span class="hl">${remitLine}</span> — total payback is <span class="hl">${fmt(payback)}</span>.<br><br>The cost of this capital is <span class="hl">${fmt(cost)}</span> — or <span class="hl">${cocCents} cents on every dollar</span> you put to work.<br><br>The question isn't whether it's expensive — the question is: what does this capital do for your business over the next <span class="hl">${termLabel}</span>? If this covers payroll, lands a contract, or keeps you operational through your busy season — that math changes fast."</div>`;
       } else {
         scriptBox.innerHTML = '<p class="script-placeholder">Enter deal inputs above to generate your call script.</p>';
       }
