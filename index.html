@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deal Calculator — Suburban Funding</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f5f3;
+    --surface: #ffffff;
+    --surface2: #f0efed;
+    --border: rgba(0,0,0,0.10);
+    --border-strong: rgba(0,0,0,0.18);
+    --text: #1a1a1a;
+    --text-secondary: #666660;
+    --text-tertiary: #999994;
+    --blue-bg: #e8f0fb;
+    --blue-text: #1a4fa0;
+    --green-bg: #e8f3e0;
+    --green-text: #2e6b10;
+    --amber-bg: #fdf0d8;
+    --amber-text: #7a4a08;
+    --red-bg: #fce8e8;
+    --red-text: #922020;
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem 4rem;
+  }
+
+  .container { max-width: 700px; margin: 0 auto; }
+
+  header { margin-bottom: 2rem; }
+  header .logo { font-size: 13px; font-weight: 600; color: var(--text-secondary); letter-spacing: .06em; text-transform: uppercase; margin-bottom: .35rem; }
+  header h1 { font-size: 26px; font-weight: 600; color: var(--text); }
+  header p { font-size: 14px; color: var(--text-secondary); margin-top: .3rem; }
+
+  .sec-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--text-tertiary); margin-bottom: .65rem;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.4rem;
+    margin-bottom: 1rem;
+  }
+  .card h3 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: .85rem; }
+
+  .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 13px; color: var(--text-secondary); }
+  .field .hint { font-size: 11px; color: var(--text-tertiary); }
+  .field input {
+    width: 100%; padding: 8px 10px; font-size: 14px;
+    border: 0.5px solid var(--border-strong); border-radius: 8px;
+    background: var(--surface); color: var(--text); outline: none;
+    font-family: inherit;
+  }
+  .field input:focus { border-color: #4a7fd4; box-shadow: 0 0 0 3px rgba(74,127,212,.12); }
+
+  .remit-toggle { display: flex; gap: 8px; margin: 1rem 0 .75rem; }
+  .remit-toggle button {
+    font-size: 12px; padding: 5px 14px; border-radius: 20px; cursor: pointer;
+    background: transparent; border: 0.5px solid var(--border-strong);
+    color: var(--text-secondary); font-family: inherit; transition: all .15s;
+  }
+  .remit-toggle button.active {
+    background: var(--blue-bg); border-color: #4a7fd4; color: var(--blue-text); font-weight: 600;
+  }
+
+  .out-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 1rem; }
+  .metric { background: var(--surface2); border-radius: var(--radius); padding: .85rem 1rem; }
+  .metric.hi { background: var(--blue-bg); }
+  .metric .ml { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-tertiary); margin-bottom: 4px; }
+  .metric.hi .ml { color: var(--blue-text); opacity: .8; }
+  .metric .mv { font-size: 20px; font-weight: 600; color: var(--text); }
+  .metric.hi .mv { color: var(--blue-text); }
+  .metric .ms { font-size: 12px; color: var(--text-tertiary); margin-top: 3px; }
+  .metric.hi .ms { color: var(--blue-text); opacity: .7; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1rem; }
+  @media(max-width: 520px) { .two-col { grid-template-columns: 1fr; } }
+
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .bar-label { font-size: 12px; color: var(--text-secondary); width: 115px; flex-shrink: 0; }
+  .bar-track { flex: 1; height: 8px; background: var(--surface2); border-radius: 20px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 20px; transition: width .3s; }
+  .bar-val { font-size: 12px; font-weight: 600; color: var(--text); width: 76px; text-align: right; flex-shrink: 0; }
+  .aff-badge { border-radius: var(--radius); padding: .7rem 1rem; margin-top: .85rem; font-size: 13px; line-height: 1.55; }
+  .aff-ok { background: var(--green-bg); color: var(--green-text); }
+  .aff-warn { background: var(--amber-bg); color: var(--amber-text); }
+  .aff-bad { background: var(--red-bg); color: var(--red-text); }
+  .aff-placeholder { font-size: 13px; color: var(--text-tertiary); font-style: italic; }
+
+  .thresh-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .thresh-table tr { border-bottom: 0.5px solid var(--border); }
+  .thresh-table tr:last-child { border-bottom: none; }
+  .thresh-table td { padding: 7px 4px; color: var(--text-secondary); vertical-align: top; }
+  .thresh-table td:first-child { width: 82px; white-space: nowrap; }
+  .thresh-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .t-green { background: #4a9420; }
+  .t-amber { background: #c07a14; }
+  .t-red { background: #d94040; }
+  .thresh-note { font-size: 11px; color: var(--text-tertiary); margin-top: .75rem; line-height: 1.55; padding-top: .75rem; border-top: 0.5px solid var(--border); }
+
+  .script-box {
+    background: var(--surface2); border-radius: var(--radius);
+    padding: 1.1rem 1.2rem; font-size: 13.5px; line-height: 1.9;
+    color: var(--text);
+  }
+  .script-box .hl { font-weight: 600; color: var(--blue-text); }
+  .script-placeholder { font-size: 13px; color: var(--text-tertiary); font-style: italic; }
+
+  hr.div { border: none; border-top: 0.5px solid var(--border); margin: 1.25rem 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">Suburban Funding</div>
+    <h1>Deal Calculator</h1>
+    <p>Broker call tool — enter offer details to build your live script.</p>
+  </header>
+
+  <div class="card">
+    <div class="sec-label">Deal inputs</div>
+    <div class="input-grid">
+      <div class="field">
+        <label for="funded">Funded amount ($)</label>
+        <input type="number" id="funded" value="75000" min="1000" step="1000">
+      </div>
+      <div class="field">
+        <label for="factor">Factor rate</label>
+        <input type="number" id="factor" value="1.35" min="1.10" max="1.99" step="0.01">
+        <span class="hint">e.g. 1.35 = 35¢ per dollar</span>
+      </div>
+      <div class="field">
+        <label for="term">Term (weeks)</label>
+        <input type="number" id="term" value="24" min="1" max="104" step="1">
+        <span class="hint">e.g. 24 wks, 36 wks</span>
+      </div>
+      <div class="field">
+        <label for="mrev">Monthly revenue ($)</label>
+        <input type="number" id="mrev" value="" min="0" step="1000" placeholder="Optional">
+        <span class="hint">For affordability analysis</span>
+      </div>
+    </div>
+
+    <div class="remit-toggle">
+      <button id="btn-daily" class="active" onclick="setRemit('daily')">Daily remittance</button>
+      <button id="btn-weekly" onclick="setRemit('weekly')">Weekly remittance</button>
+    </div>
+  </div>
+
+  <div class="sec-label">Offer breakdown</div>
+  <div class="out-grid">
+    <div class="metric hi">
+      <div class="ml">Total payback</div>
+      <div class="mv" id="out-payback">—</div>
+      <div class="ms" id="out-cost">—</div>
+    </div>
+    <div class="metric">
+      <div class="ml">Cost per dollar</div>
+      <div class="mv" id="out-coc">—</div>
+      <div class="ms" id="out-coc-sub">—</div>
+    </div>
+    <div class="metric">
+      <div class="ml" id="remit-label">Daily remittance</div>
+      <div class="mv" id="out-remit">—</div>
+      <div class="ms" id="remit-sub">—</div>
+    </div>
+  </div>
+
+  <hr class="div">
+
+  <div class="two-col">
+    <div class="card">
+      <h3>Affordability</h3>
+      <div id="aff-body"><p class="aff-placeholder">Enter monthly revenue to see affordability.</p></div>
+    </div>
+    <div class="card">
+      <h3>Remittance load — industry context</h3>
+      <table class="thresh-table">
+        <tr>
+          <td><span class="thresh-dot t-green"></span>Under 15%</td>
+          <td>Comfortable. Easy to service. Straightforward close.</td>
+        </tr>
+        <tr>
+          <td><span class="thresh-dot t-green"></span>15–25%</td>
+          <td>Normal MCA range. Most businesses handle this without strain.</td>
+        </tr>
+        <tr>
+          <td><span class="thresh-dot t-amber"></span>25–35%</td>
+          <td>Elevated but common on stacked positions. Confirm use of funds justifies the load.</td>
+        </tr>
+        <tr>
+          <td><span class="thresh-dot t-red"></span>Over 35%</td>
+          <td>High load. Merchant will feel it. Flag if they have existing positions.</td>
+        </tr>
+      </table>
+      <p class="thresh-note">Talking point: "A normal MCA runs up to 35% of monthly revenue. This deal has you at [X%] — that's in the healthy range."</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Live call script</h3>
+    <div id="script-box"><p class="script-placeholder">Enter deal inputs above to generate your call script.</p></div>
+  </div>
+
+</div>
+
+<script>
+  let remitMode = 'daily';
+
+  function setRemit(m) {
+    remitMode = m;
+    document.getElementById('btn-daily').classList.toggle('active', m === 'daily');
+    document.getElementById('btn-weekly').classList.toggle('active', m === 'weekly');
+    calc();
+  }
+
+  function fmt(n) { return '$' + Math.round(n).toLocaleString(); }
+  function pct(n) { return n.toFixed(1) + '%'; }
+
+  function calc() {
+    const funded = parseFloat(document.getElementById('funded').value) || 0;
+    const factor = parseFloat(document.getElementById('factor').value) || 1;
+    const termWeeks = parseFloat(document.getElementById('term').value) || 1;
+    const mrev = parseFloat(document.getElementById('mrev').value) || 0;
+
+    const payback = funded * factor;
+    const cost = payback - funded;
+    const cocCents = Math.round((factor - 1) * 100);
+    const daily = payback / (termWeeks * 5);
+    const weekly = payback / termWeeks;
+    const monthlyRemit = daily * 21;
+
+    const remitAmt = remitMode === 'daily' ? daily : weekly;
+    const remitPeriod = remitMode === 'daily' ? 'per business day' : 'per week';
+    const remitLine = remitMode === 'daily'
+      ? fmt(daily) + ' per business day'
+      : fmt(weekly) + ' per week';
+
+    document.getElementById('out-payback').textContent = fmt(payback);
+    document.getElementById('out-cost').textContent = 'Cost of capital: ' + fmt(cost);
+    document.getElementById('out-coc').textContent = cocCents + '¢ per $1';
+    document.getElementById('out-coc-sub').textContent = 'Total cost: ' + fmt(cost) + ' on ' + fmt(funded);
+    document.getElementById('remit-label').textContent = remitMode === 'daily' ? 'Daily remittance' : 'Weekly remittance';
+    document.getElementById('out-remit').textContent = fmt(remitAmt);
+    document.getElementById('remit-sub').textContent = remitPeriod;
+
+    const scriptBox = document.getElementById('script-box');
+
+    if (mrev > 0) {
+      const rp = (monthlyRemit / mrev) * 100;
+      const remaining = mrev - monthlyRemit;
+      const barW = Math.min(rp, 100).toFixed(1);
+      const revBarW = Math.max(100 - rp, 0).toFixed(1);
+
+      let badgeClass, badgeText;
+      if (rp <= 15) { badgeClass = 'aff-ok'; badgeText = '<strong>Comfortable load</strong> at ' + pct(rp) + ' of monthly revenue. Well within normal range — strong talking point.'; }
+      else if (rp <= 25) { badgeClass = 'aff-ok'; badgeText = '<strong>Normal MCA range</strong> at ' + pct(rp) + ' of monthly revenue. Most businesses service this without strain.'; }
+      else if (rp <= 35) { badgeClass = 'aff-warn'; badgeText = '<strong>Elevated at ' + pct(rp) + '</strong> of monthly revenue. Still within industry norms — confirm use of funds and check for other positions.'; }
+      else { badgeClass = 'aff-bad'; badgeText = '<strong>High load at ' + pct(rp) + '</strong> of monthly revenue. Merchant will feel this. Existing positions make it harder — flag before submitting.'; }
+
+      document.getElementById('aff-body').innerHTML = `
+        <div class="bar-row"><span class="bar-label">Monthly remittance</span><div class="bar-track"><div class="bar-fill" style="width:${barW}%;background:#d94040"></div></div><span class="bar-val">${fmt(monthlyRemit)}</span></div>
+        <div class="bar-row"><span class="bar-label">Revenue remaining</span><div class="bar-track"><div class="bar-fill" style="width:${revBarW}%;background:#4a9420"></div></div><span class="bar-val">${fmt(Math.max(remaining, 0))}</span></div>
+        <div class="bar-row" style="margin-bottom:0"><span class="bar-label">Monthly revenue</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:#c8c7c2"></div></div><span class="bar-val">${fmt(mrev)}</span></div>
+        <div class="aff-badge ${badgeClass}">${badgeText}</div>
+      `;
+
+      scriptBox.innerHTML = `<div class="script-box">"Here's what this looks like in plain numbers. You're getting <span class="hl">${fmt(funded)}</span> deposited. Over a <span class="hl">${termWeeks}-week term</span>, you'll remit <span class="hl">${remitLine}</span> — total payback is <span class="hl">${fmt(payback)}</span>.<br><br>The cost of this capital is <span class="hl">${fmt(cost)}</span> — or <span class="hl">${cocCents} cents on every dollar</span> you put to work.<br><br>On your revenue, that remittance is <span class="hl">${pct(rp)} of your monthly gross</span>. You're keeping <span class="hl">${fmt(Math.max(remaining, 0))}</span> of every <span class="hl">${fmt(mrev)}</span> you bring in. For context, a normal MCA runs up to 35% of monthly revenue — <span class="hl">you're at ${pct(rp)}</span>.<br><br>The question isn't whether it's expensive — the question is: what does this capital do for your business over the next <span class="hl">${termWeeks} weeks</span>? If this covers payroll, lands a contract, or keeps you operational through your busy season — that math changes fast."</div>`;
+
+    } else {
+      document.getElementById('aff-body').innerHTML = '<p class="aff-placeholder">Enter monthly revenue to see affordability.</p>';
+      if (funded > 0 && factor > 1) {
+        scriptBox.innerHTML = `<div class="script-box">"Here's what this looks like in plain numbers. You're getting <span class="hl">${fmt(funded)}</span> deposited. Over a <span class="hl">${termWeeks}-week term</span>, you'll remit <span class="hl">${remitLine}</span> — total payback is <span class="hl">${fmt(payback)}</span>.<br><br>The cost of this capital is <span class="hl">${fmt(cost)}</span> — or <span class="hl">${cocCents} cents on every dollar</span> you put to work.<br><br>The question isn't whether it's expensive — the question is: what does this capital do for your business over the next <span class="hl">${termWeeks} weeks</span>? If this covers payroll, lands a contract, or keeps you operational through your busy season — that math changes fast."</div>`;
+      } else {
+        scriptBox.innerHTML = '<p class="script-placeholder">Enter deal inputs above to generate your call script.</p>';
+      }
+    }
+  }
+
+  ['funded', 'factor', 'term', 'mrev'].forEach(id => {
+    document.getElementById(id).addEventListener('input', calc);
+  });
+
+  calc();
+</script>
+</body>
+</html>
