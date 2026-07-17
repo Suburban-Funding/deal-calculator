@@ -133,6 +133,36 @@
   .script-placeholder { font-size: 13px; color: var(--text-tertiary); font-style: italic; }
 
   hr.div { border: none; border-top: 0.5px solid var(--border); margin: 1.25rem 0; }
+
+  .pos-row {
+    display: grid; grid-template-columns: 1.3fr 1fr 132px 26px;
+    gap: 8px; align-items: center; margin-bottom: 8px;
+  }
+  @media(max-width: 560px) { .pos-row { grid-template-columns: 1fr 1fr; grid-template-areas: "name name" "amt freq" "remove remove"; } }
+  .pos-row input {
+    padding: 8px 10px; font-size: 13px; font-family: inherit;
+    border: 0.5px solid var(--border-strong); border-radius: 8px;
+    background: var(--surface); color: var(--text); outline: none;
+  }
+  .pos-row input:focus { border-color: #4a7fd4; box-shadow: 0 0 0 3px rgba(74,127,212,.12); }
+  .pos-freq-toggle { display: flex; gap: 4px; }
+  .pos-freq-btn {
+    flex: 1; font-size: 11px; font-weight: 500; padding: 7px 0;
+    cursor: pointer; font-family: inherit; border-radius: 6px;
+    border: 1.5px solid #bbb; color: #999; background: #fff; transition: all .15s;
+  }
+  .pos-freq-btn.active { border: 1.5px solid #1a1a1a; color: #fff; background: #1a1a1a; }
+  .pos-remove {
+    background: none; border: none; color: var(--text-tertiary);
+    font-size: 18px; line-height: 1; cursor: pointer; padding: 4px 6px;
+  }
+  .pos-remove:hover { color: var(--red-text); }
+  #btn-add-position {
+    margin-top: 4px; font-size: 12px; font-weight: 500; padding: 7px 14px;
+    border-radius: 8px; cursor: pointer; font-family: inherit;
+    border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text-secondary);
+  }
+  #btn-add-position:hover { background: var(--surface2); }
 </style>
 </head>
 <body>
@@ -169,11 +199,11 @@
         <input type="number" id="mrev" value="" min="0" step="1000" placeholder="Optional">
         <span class="hint">For affordability analysis</span>
       </div>
-    </div>
-
-    <div class="remit-toggle">
-      <button id="btn-daily" class="active" onclick="setRemit('daily')">Daily remittance</button>
-      <button id="btn-weekly" onclick="setRemit('weekly')">Weekly remittance</button>
+      <div class="field">
+        <label for="fee">Fee (%)</label>
+        <input type="number" id="fee" value="" min="0" max="20" step="0.1" placeholder="Optional">
+        <span class="hint">Reduces merchant proceeds only — payback unaffected</span>
+      </div>
     </div>
   </div>
 
@@ -185,18 +215,24 @@
       <div class="ms" id="out-cost">—</div>
     </div>
     <div class="metric">
-      <div class="ml">Cost per dollar</div>
-      <div class="mv" id="out-coc">—</div>
-      <div class="ms" id="out-coc-sub">—</div>
-    </div>
-    <div class="metric">
       <div class="ml" id="remit-label">Daily remittance</div>
       <div class="mv" id="out-remit">—</div>
       <div class="ms" id="remit-sub">—</div>
     </div>
+    <div class="metric" id="net-metric" style="display:none">
+      <div class="ml">Net to merchant</div>
+      <div class="mv" id="out-net">—</div>
+      <div class="ms" id="out-net-sub">—</div>
+    </div>
   </div>
 
   <hr class="div">
+
+  <div class="card">
+    <h3>Current positions <span style="font-weight:400;color:var(--text-tertiary);font-size:12px;">(optional — other open MCA positions the merchant is stacked with)</span></h3>
+    <div id="positions-list"></div>
+    <button type="button" id="btn-add-position" onclick="addPosition()">+ Add position</button>
+  </div>
 
   <div class="two-col">
     <div class="card">
@@ -223,15 +259,7 @@
 </div>
 
 <script>
-  let remitMode = 'daily';
   let termMode = 'weeks';
-
-  function setRemit(m) {
-    remitMode = m;
-    document.getElementById('btn-daily').classList.toggle('active', m === 'daily');
-    document.getElementById('btn-weekly').classList.toggle('active', m === 'weekly');
-    calc();
-  }
 
   function setTermMode(m) {
     termMode = m;
@@ -243,43 +271,105 @@
   function fmt(n) { return '$' + Math.round(n).toLocaleString(); }
   function pct(n) { return n.toFixed(1) + '%'; }
 
+  let posCounter = 0;
+
+  function addPosition() {
+    posCounter++;
+    const row = document.createElement('div');
+    row.className = 'pos-row';
+    row.dataset.posId = posCounter;
+    row.innerHTML = `
+      <input type="text" class="pos-name" placeholder="Funder name">
+      <input type="number" class="pos-amt" placeholder="Remittance $" min="0" step="10">
+      <div class="pos-freq-toggle">
+        <button type="button" class="pos-freq-btn active" data-freq="daily" onclick="setPosFreq(this)">Daily</button>
+        <button type="button" class="pos-freq-btn" data-freq="weekly" onclick="setPosFreq(this)">Weekly</button>
+      </div>
+      <button type="button" class="pos-remove" onclick="removePosition(this)" aria-label="Remove position">×</button>
+    `;
+    document.getElementById('positions-list').appendChild(row);
+    row.querySelectorAll('input').forEach(inp => inp.addEventListener('input', calc));
+    calc();
+  }
+
+  function setPosFreq(btn) {
+    const row = btn.closest('.pos-row');
+    row.querySelectorAll('.pos-freq-btn').forEach(b => b.classList.toggle('active', b === btn));
+    calc();
+  }
+
+  function removePosition(btn) {
+    btn.closest('.pos-row').remove();
+    calc();
+  }
+
+  function getPositions() {
+    const rows = [];
+    document.querySelectorAll('.pos-row').forEach(row => {
+      const amt = parseFloat(row.querySelector('.pos-amt').value) || 0;
+      if (amt <= 0) return;
+      const name = row.querySelector('.pos-name').value.trim() || 'Unnamed position';
+      const freq = row.querySelector('.pos-freq-btn.active').dataset.freq;
+      const monthly = freq === 'daily' ? amt * 21 : amt * 4.33;
+      rows.push({ name, amt, freq, monthly });
+    });
+    return rows;
+  }
+
   function calc() {
     const funded = parseFloat(document.getElementById('funded').value) || 0;
     const factor = parseFloat(document.getElementById('factor').value) || 1;
     const termInput = parseFloat(document.getElementById('term').value) || 1;
     const mrev = parseFloat(document.getElementById('mrev').value) || 0;
+    const feePct = parseFloat(document.getElementById('fee').value) || 0;
 
     const termWeeks = termMode === 'days' ? termInput / 7 : termInput;
     const termLabel = termMode === 'days' ? termInput + '-day term' : termInput + '-week term';
 
     const payback = funded * factor;
     const cost = payback - funded;
+    const feeAmt = funded * (feePct / 100);
+    const netToMerchant = funded - feeAmt;
     const cocCents = Math.round((factor - 1) * 100);
     const workingDays = termWeeks * 5;
     const daily = payback / workingDays;
     const weekly = payback / termWeeks;
     const monthlyRemit = daily * 21;
 
-    const remitAmt = remitMode === 'daily' ? daily : weekly;
-    const remitPeriod = remitMode === 'daily' ? 'per business day' : 'per week';
-    const remitLine = remitMode === 'daily'
+    const remitAmt = termMode === 'days' ? daily : weekly;
+    const remitPeriod = termMode === 'days' ? 'per business day' : 'per week';
+    const remitLine = termMode === 'days'
       ? fmt(daily) + ' per business day'
       : fmt(weekly) + ' per week';
 
     document.getElementById('out-payback').textContent = fmt(payback);
     document.getElementById('out-cost').textContent = 'Cost of capital: ' + fmt(cost);
-    document.getElementById('out-coc').textContent = cocCents + '¢ per $1';
-    document.getElementById('out-coc-sub').textContent = 'Total cost: ' + fmt(cost) + ' on ' + fmt(funded);
-    document.getElementById('remit-label').textContent = remitMode === 'daily' ? 'Daily remittance' : 'Weekly remittance';
+    document.getElementById('remit-label').textContent = termMode === 'days' ? 'Daily remittance' : 'Weekly remittance';
     document.getElementById('out-remit').textContent = fmt(remitAmt);
     document.getElementById('remit-sub').textContent = remitPeriod;
 
+    const netMetric = document.getElementById('net-metric');
+    if (feePct > 0) {
+      netMetric.style.display = '';
+      document.getElementById('out-net').textContent = fmt(netToMerchant);
+      document.getElementById('out-net-sub').textContent = 'After ' + feePct + '% fee (' + fmt(feeAmt) + ') — payback still based on ' + fmt(funded);
+    } else {
+      netMetric.style.display = 'none';
+    }
+
     const scriptBox = document.getElementById('script-box');
+    const positions = getPositions();
+    const existingMonthlyRemit = positions.reduce((sum, p) => sum + p.monthly, 0);
+    const totalMonthlyRemit = monthlyRemit + existingMonthlyRemit;
 
     if (mrev > 0) {
-      const rp = (monthlyRemit / mrev) * 100;
-      const remaining = mrev - monthlyRemit;
-      const barW = Math.min(rp, 100).toFixed(1);
+      const rp = (totalMonthlyRemit / mrev) * 100;
+      const rpNewOnly = (monthlyRemit / mrev) * 100;
+      const remaining = mrev - totalMonthlyRemit;
+      const newBarWNum = Math.min(rpNewOnly, 100);
+      const existBarWNum = Math.min(Math.max(rp - rpNewOnly, 0), 100 - newBarWNum);
+      const newBarW = newBarWNum.toFixed(1);
+      const existBarW = existBarWNum.toFixed(1);
       const revBarW = Math.max(100 - rp, 0).toFixed(1);
 
       let badgeClass, badgeText;
@@ -288,26 +378,35 @@
       else if (rp <= 35) { badgeClass = 'aff-warn'; badgeText = '<strong>Elevated at ' + pct(rp) + '</strong> of monthly revenue. Still within industry norms — confirm use of funds and check for other positions.'; }
       else { badgeClass = 'aff-bad'; badgeText = '<strong>High load at ' + pct(rp) + '</strong> of monthly revenue. Merchant will feel this. Existing positions make it harder — flag before submitting.'; }
 
+      const existingRowHtml = existingMonthlyRemit > 0
+        ? `<div class="bar-row"><span class="bar-label">Existing position(s)</span><div class="bar-track"><div class="bar-fill" style="width:${existBarW}%;background:#c07a14"></div></div><span class="bar-val">${fmt(existingMonthlyRemit)}</span></div>`
+        : '';
+
       document.getElementById('aff-body').innerHTML = `
-        <div class="bar-row"><span class="bar-label">Monthly remittance</span><div class="bar-track"><div class="bar-fill" style="width:${barW}%;background:#d94040"></div></div><span class="bar-val">${fmt(monthlyRemit)}</span></div>
+        <div class="bar-row"><span class="bar-label">This deal</span><div class="bar-track"><div class="bar-fill" style="width:${newBarW}%;background:#d94040"></div></div><span class="bar-val">${fmt(monthlyRemit)}</span></div>
+        ${existingRowHtml}
         <div class="bar-row"><span class="bar-label">Revenue remaining</span><div class="bar-track"><div class="bar-fill" style="width:${revBarW}%;background:#4a9420"></div></div><span class="bar-val">${fmt(Math.max(remaining, 0))}</span></div>
         <div class="bar-row" style="margin-bottom:0"><span class="bar-label">Monthly revenue</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:#c8c7c2"></div></div><span class="bar-val">${fmt(mrev)}</span></div>
         <div class="aff-badge ${badgeClass}">${badgeText}</div>
       `;
 
-      scriptBox.innerHTML = `<div class="script-box">"Here's what this looks like in plain numbers. You're getting <span class="hl">${fmt(funded)}</span> deposited. Over a <span class="hl">${termLabel}</span>, you'll remit <span class="hl">${remitLine}</span> — total payback is <span class="hl">${fmt(payback)}</span>.<br><br>The cost of this capital is <span class="hl">${fmt(cost)}</span> — or <span class="hl">${cocCents} cents on every dollar</span> you put to work.<br><br>On your revenue, that remittance is <span class="hl">${pct(rp)} of your monthly gross</span>. You're keeping <span class="hl">${fmt(Math.max(remaining, 0))}</span> of every <span class="hl">${fmt(mrev)}</span> you bring in. For context, a normal MCA runs up to 35% of monthly revenue — <span class="hl">you're at ${pct(rp)}</span>.<br><br>The question isn't whether it's expensive — the question is: what does this capital do for your business over the next <span class="hl">${termLabel}</span>? If this covers payroll, lands a contract, or keeps you operational through your busy season — that math changes fast."</div>`;
+      const stackedLine = existingMonthlyRemit > 0
+        ? `<br><br>Combined with your existing ${positions.length > 1 ? 'positions' : 'position'} (${positions.map(p => p.name).join(', ')}), your total remittance load comes to <span class="hl">${pct(rp)} of monthly revenue</span> — this deal alone is <span class="hl">${pct(rpNewOnly)}</span>.`
+        : '';
+
+      scriptBox.innerHTML = `<div class="script-box">"Here's what this looks like in plain numbers. You're getting <span class="hl">${fmt(feePct > 0 ? netToMerchant : funded)}</span> deposited${feePct > 0 ? ' (after fees)' : ''}. Over a <span class="hl">${termLabel}</span>, you'll remit <span class="hl">${remitLine}</span> — total payback is <span class="hl">${fmt(payback)}</span>.<br><br>The cost of this capital is <span class="hl">${fmt(cost)}</span> — or <span class="hl">${cocCents} cents on every dollar</span> you put to work.<br><br>On your revenue, that remittance is <span class="hl">${pct(rpNewOnly)} of your monthly gross</span>. You're keeping <span class="hl">${fmt(Math.max(remaining, 0))}</span> of every <span class="hl">${fmt(mrev)}</span> you bring in.${stackedLine} For context, a normal MCA runs up to 35% of monthly revenue — <span class="hl">you're at ${pct(rp)}</span> combined.<br><br>The question isn't whether it's expensive — the question is: what does this capital do for your business over the next <span class="hl">${termLabel}</span>? If this covers payroll, lands a contract, or keeps you operational through your busy season — that math changes fast."</div>`;
 
     } else {
       document.getElementById('aff-body').innerHTML = '<p class="aff-placeholder">Enter monthly revenue to see affordability.</p>';
       if (funded > 0 && factor > 1) {
-        scriptBox.innerHTML = `<div class="script-box">"Here's what this looks like in plain numbers. You're getting <span class="hl">${fmt(funded)}</span> deposited. Over a <span class="hl">${termLabel}</span>, you'll remit <span class="hl">${remitLine}</span> — total payback is <span class="hl">${fmt(payback)}</span>.<br><br>The cost of this capital is <span class="hl">${fmt(cost)}</span> — or <span class="hl">${cocCents} cents on every dollar</span> you put to work.<br><br>The question isn't whether it's expensive — the question is: what does this capital do for your business over the next <span class="hl">${termLabel}</span>? If this covers payroll, lands a contract, or keeps you operational through your busy season — that math changes fast."</div>`;
+        scriptBox.innerHTML = `<div class="script-box">"Here's what this looks like in plain numbers. You're getting <span class="hl">${fmt(feePct > 0 ? netToMerchant : funded)}</span> deposited${feePct > 0 ? ' (after fees)' : ''}. Over a <span class="hl">${termLabel}</span>, you'll remit <span class="hl">${remitLine}</span> — total payback is <span class="hl">${fmt(payback)}</span>.<br><br>The cost of this capital is <span class="hl">${fmt(cost)}</span> — or <span class="hl">${cocCents} cents on every dollar</span> you put to work.<br><br>The question isn't whether it's expensive — the question is: what does this capital do for your business over the next <span class="hl">${termLabel}</span>? If this covers payroll, lands a contract, or keeps you operational through your busy season — that math changes fast."</div>`;
       } else {
         scriptBox.innerHTML = '<p class="script-placeholder">Enter deal inputs above to generate your call script.</p>';
       }
     }
   }
 
-  ['funded', 'factor', 'term', 'mrev'].forEach(id => {
+  ['funded', 'factor', 'term', 'mrev', 'fee'].forEach(id => {
     document.getElementById(id).addEventListener('input', calc);
   });
 
